@@ -1,10 +1,10 @@
 use std::fs;
 use std::process::Command;
 use csv::ReaderBuilder;
-use clap::{Arg, Command as ClapCommand};
+use clap::{Arg, Command as ClapCommand, ArgMatches};
 
-fn main() {
-    let matches = ClapCommand::new("arrayify")
+fn parse_args() -> ArgMatches {
+    ClapCommand::new("arrayify")
         .version("1.3")
         .author("Sam Dougan")
         .about("Submits a bsub job array from a CSV file")
@@ -31,15 +31,26 @@ fn main() {
             .long("memory")
             .value_name("MEMORY_GB")
             .help("Memory per job in GB")
-            .default_value("1"))  // Default to 1GB if not specified
+            .default_value("1"))
         .arg(Arg::new("threads")
             .short('t')
             .long("threads")
             .value_name("THREADS")
             .help("Threads per job")
             .default_value("1"))
-        .get_matches();
+        .get_matches()
+}
 
+fn print_run_stats(num_jobs: usize, log_dir: &str) {
+    println!("✅ Job submission complete!");
+    println!("📌 {} jobs submitted.", num_jobs);
+    println!("📂 Logs can be found in: {}", log_dir);
+    println!("📡 Track progress using 'bjobs'!");
+}
+
+fn main() {
+    let matches = parse_args();
+    
     let csv_file = matches.get_one::<String>("csv").unwrap();
     let command_template = matches.get_one::<String>("command").unwrap();
     let log_dir = matches.get_one::<String>("log").unwrap();
@@ -109,4 +120,7 @@ fn main() {
         .expect("Failed to execute bsub command");
 
     let _ = child.wait();
+    
+    // Print run stats
+    print_run_stats(num_jobs, log_dir);
 }
