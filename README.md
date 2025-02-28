@@ -1,5 +1,10 @@
 # arrayify
 
+![Rust Version](https://img.shields.io/badge/Rust-1.85.0-blue?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Issues](https://img.shields.io/github/issues/yourusername/arrayify)
+
+
 arrayify is a command-line tool for submitting and managing LSF job arrays using a CSV file.
 
 ## Installation
@@ -75,11 +80,9 @@ arrayify sub --csv jobs.csv \
 
 Check Job Status
 
+```
 arrayify check <JOB_ID>
-
-Required Argument
-
-<JOB_ID>: LSF job ID to check.
+```
 
 Example
 
