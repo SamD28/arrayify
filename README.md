@@ -2,7 +2,7 @@
 
 ![Rust Version](https://img.shields.io/badge/Rust-1.85.0-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Issues](https://img.shields.io/github/issues/yourusername/arrayify)
+![Issues](https://img.shields.io/github/issues/SamD28/arrayify)
 
 
 arrayify is a command-line tool for submitting and managing LSF job arrays using a CSV file.
