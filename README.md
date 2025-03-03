@@ -33,7 +33,7 @@ With -d (directory) options you are limted to ID,R1,R2 identifers however with t
 
 this can now be run and will create a array for each file pair in a directory or every row in a manifest
 
-### example commands
+### Example commands
 
 ```
 arrayify sub --dir <DIRECTORY> --command "<COMMAND_TEMPLATE>" [OPTIONS]
