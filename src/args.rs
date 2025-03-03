@@ -2,7 +2,7 @@ use clap::{Arg, ArgMatches, Command as ClapCommand};
 
 pub fn parse_args() -> ArgMatches {
     ClapCommand::new("arrayify")
-        .version("0.1.1")
+        .version("0.1.2")
         .author("Sam Dougan")
         .about("Submits and checks bsub job arrays from a CSV file")
         .subcommand_required(true)
