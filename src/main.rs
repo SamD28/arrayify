@@ -141,13 +141,19 @@ pub fn submit_jobs(
     Ok(())
 }
 
-fn print_run_stats(num_jobs: usize, log_dir: &str, log_file_path: String, job_id: &str) {
-    println!("🚀 Job submission complete! ✅");
-    println!("🔖 Job ID is: {}", job_id);
-    println!("📌 {} jobs submitted.", num_jobs);
-    println!("📝 Job commands logged in: {}", log_file_path);
-    println!("📂 Logs can be found in: {}", log_dir);
-    println!("📡 Track with -\narrayify check {}\n", job_id);
+fn print_run_stats(num_jobs: usize, log_dir: &str, log_file_path: &str, job_id: &str) {
+    let message = format!(
+        r#"🚀 Job submission complete! ✅
+🔖 Job ID is: {}
+📌 {} jobs submitted.
+📝 Job commands logged in: {}
+📂 Logs can be found in: {}
+📡 Track with -
+   arrayify check {}"#,
+        job_id, num_jobs, log_file_path, log_dir, job_id
+    );
+
+    println!("{}", message);
 }
 
 fn check_jobs(job_id: &str) {
