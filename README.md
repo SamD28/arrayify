@@ -3,9 +3,11 @@
 ![Rust Version](https://img.shields.io/badge/Rust-1.85.0-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Issues](https://img.shields.io/github/issues/SamD28/arrayify)
-
+![Tests](https://github.com/SamD28/arrayify/actions/workflows/rust.yml/badge.svg)
 
 arrayify is a command-line tool for submitting and managing LSF job arrays using a CSV file.
+
+This is a Rust project with automated CI/CD using GitHub Actions.
 
 ## Installation
 
