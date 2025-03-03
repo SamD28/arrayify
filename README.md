@@ -38,7 +38,7 @@ this can now be run and will create a array for each file pair in a directory or
 ```
 arrayify sub --dir <DIRECTORY> --command "<COMMAND_TEMPLATE>" [OPTIONS]
 ```
-
+OR
 ```
 arrayify sub --csv <CSV_FILE> --command "<COMMAND_TEMPLATE>" [OPTIONS]
 ```
