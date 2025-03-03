@@ -237,14 +237,14 @@ fn main() {
                 })
                 .unwrap_or(None);
 
-            let _ = submit_jobs(
+            submit_jobs(
                 csv_file,
                 command_template,
                 log_dir,
                 memory_gb,
                 threads,
                 batch_size,
-            );
+            ).expect("Job submission failed");
         }
         Some(("check", check_matches)) => {
             let job_id = check_matches.get_one::<String>("job_id").unwrap();
