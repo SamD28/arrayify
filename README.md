@@ -11,8 +11,6 @@ This is a Rust project with automated CI/CD using GitHub Actions.
 
 ## Usage
 
-Submit Job Array:
-
 First you need to decide on a command to run and produce a "template" for it
 
 For example to submit spades with paired end reads
