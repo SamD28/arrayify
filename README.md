@@ -24,7 +24,7 @@ Alternatively, run directly with:
 cargo run -- sub --csv jobs.csv --command "echo {ID} {R1} {R2}"
 ```
 
-Usage
+## Usage
 
 Submit Job Array
 
