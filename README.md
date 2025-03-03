@@ -9,26 +9,35 @@ arrayify is a command-line tool for submitting and managing LSF job arrays using
 
 This is a Rust project with automated CI/CD using GitHub Actions.
 
-## Installation
-
-Ensure you have Rust installed, then build and install the tool:
-
-```
-cargo build --release
-```
-```
-cp target/release/arrayify /usr/local/bin/
-```
-
-Alternatively, run directly with:
-
-```
-cargo run -- sub --csv jobs.csv --command "echo {ID} {R1} {R2}"
-```
-
 ## Usage
 
-Submit Job Array
+Submit Job Array:
+
+First you need to decide on a command to run and produce a "template" for it
+
+For example to submit spades with paired end reads
+
+```
+spades.py -1 read_1 -2 read_2 -o sample_out
+```
+
+In order to "convert" this into a format understood by arrayify you first need to replace the "wildcards" in the template
+
+With -d (directory) options you are limted to ID,R1,R2 identifers however with the -s manifest any manifest header will be able to be used
+
+```
+"spades.py -1 {R1} -2 {R2} -o {ID}"
+```
+
+!note this has to be quoted
+
+this can now be run and will create a array for each file pair in a directory or every row in a manifest
+
+### example commands
+
+```
+arrayify sub --dir <DIRECTORY> --command "<COMMAND_TEMPLATE>" [OPTIONS]
+```
 
 ```
 arrayify sub --csv <CSV_FILE> --command "<COMMAND_TEMPLATE>" [OPTIONS]
@@ -39,14 +48,16 @@ Required Arguments
 ```
 -s, --csv <CSV_FILE>
 ```
+OR
+```
+-d, --dir <DIRECTORY>
+```
 
-Path to the CSV file containing job parameters.
+Template command containing "wildcard" replacement characters
 
 ```
 -c, --command <COMMAND_TEMPLATE>
 ```
-
-Command template with placeholders matching CSV headers.
 
 Example: ```"echo {ID} {R1} {R2}"```
 
@@ -72,7 +83,7 @@ Default: 20% of total jobs (rounded up).
 
 Set an explicit number to override auto-batching.
 
-Example Submission
+### Example Submission
 
 ```
 arrayify sub --csv jobs.csv \
@@ -86,7 +97,7 @@ Check Job Status
 arrayify check <JOB_ID>
 ```
 
-Example
+### Example
 
 ```
 arrayify check 12345
@@ -94,9 +105,9 @@ arrayify check 12345
 
 ## How It Works
 
-1. Parses the CSV file to extract job parameters.
+1. Parses the CSV file or directory to extract job parameters.
 
-2. Replaces placeholders in the command template with CSV values.
+2. Replaces placeholders in the command template with CSV or directory values.
 
 3. Generates and submits a job array using bsub.
 
@@ -109,6 +120,23 @@ arrayify check 12345
 5. Logs output and errors to the specified directory.
 
 6. Allows job status checking using bjobs.
+
+## Installation
+
+Ensure you have Rust installed, then build and install the tool:
+
+```
+cargo build --release
+```
+```
+cp target/release/arrayify /usr/local/bin/
+```
+
+Alternatively, run directly with:
+
+```
+cargo run -- sub --csv jobs.csv --command "echo {ID} {R1} {R2}"
+```
 
 ## Troubleshooting
 
