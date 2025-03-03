@@ -112,8 +112,6 @@ arrayify check 12345
 
 ## Troubleshooting
 
-Batch size is too large? Ensure it does not exceed the total number of jobs.
-
 Jobs not running? Check LSF queue status with:
 
 ```
