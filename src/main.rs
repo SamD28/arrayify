@@ -1,12 +1,12 @@
 mod args;
 
+use chrono::Local;
 use clap::Subcommand;
 use csv::ReaderBuilder;
 use regex::Regex;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::process::Command;
-use chrono::Local;
 
 #[derive(Subcommand)]
 enum SubCommands {
@@ -23,7 +23,10 @@ fn read_jobs_from_csv(csv_file: &str, command_template: &str) -> io::Result<Vec<
         .from_path(csv_file)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-    let headers = rdr.headers().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?.clone();
+    let headers = rdr
+        .headers()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+        .clone();
     let mut jobs = Vec::new();
 
     for result in rdr.records() {
@@ -54,7 +57,13 @@ fn calculate_batch_size(num_jobs: usize, batch_size: Option<usize>) -> usize {
     })
 }
 
-fn submit_jobs_to_scheduler(job_file_path: &str, log_dir: &str, memory_mb: u32, threads: u32, batch_size: usize) -> io::Result<String> {
+fn submit_jobs_to_scheduler(
+    job_file_path: &str,
+    log_dir: &str,
+    memory_mb: u32,
+    threads: u32,
+    batch_size: usize,
+) -> io::Result<String> {
     // Count the number of lines in the file to determine the job array size
     let num_jobs = count_lines_in_file(job_file_path)?;
     let job_array = format!("arrayify_job_array[1-{}]%{}", num_jobs, batch_size);
@@ -255,7 +264,8 @@ fn main() {
                 memory_gb,
                 threads,
                 batch_size,
-            ).expect("Job submission failed");
+            )
+            .expect("Job submission failed");
         }
         Some(("check", check_matches)) => {
             let job_id = check_matches.get_one::<String>("job_id").unwrap();
@@ -276,7 +286,11 @@ mod tests {
         let mut csv_file = NamedTempFile::new().unwrap();
         writeln!(csv_file, "header1,header2\nvalue1,value2").unwrap();
 
-        let jobs = read_jobs_from_csv(csv_file.path().to_str().unwrap(), "echo {header1} {header2}").unwrap();
+        let jobs = read_jobs_from_csv(
+            csv_file.path().to_str().unwrap(),
+            "echo {header1} {header2}",
+        )
+        .unwrap();
         assert_eq!(jobs, vec!["echo value1 value2"]);
     }
 
