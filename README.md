@@ -11,8 +11,6 @@ This is a Rust project with automated CI/CD using GitHub Actions.
 
 ## Usage
 
-Submit Job Array:
-
 First you need to decide on a command to run and produce a "template" for it
 
 For example to submit spades with paired end reads
@@ -21,7 +19,7 @@ For example to submit spades with paired end reads
 spades.py -1 read_1 -2 read_2 -o sample_out
 ```
 
-In order to "convert" this into a format understood by arrayify you first need to replace the "wildcards" in the template
+In order to "convert" this into a format understood by arrayify you first need to replace elements in the command with "wildcards" for the template
 
 With -d (directory) options you are limted to ID,R1,R2 identifers however with the -s manifest any manifest header will be able to be used
 
