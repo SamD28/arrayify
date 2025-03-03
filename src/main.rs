@@ -3,8 +3,8 @@ mod args;
 use clap::Subcommand;
 use csv::ReaderBuilder;
 use regex::Regex;
-use std::fs;
-use std::io::Write;
+use std::fs::{self, File};
+use std::io::{self, Write};
 use std::process::Command;
 
 #[derive(Subcommand)]
@@ -16,26 +16,17 @@ enum SubCommands {
     },
 }
 
-fn submit_jobs(
-    csv_file: &str,
-    command_template: &str,
-    log_dir: &str,
-    memory_gb: u32,
-    threads: u32,
-    batch_size: Option<usize>,
-) {
-    let memory_mb = memory_gb * 1000;
-    fs::create_dir_all(log_dir).expect("Failed to create log directory");
-
+fn read_jobs_from_csv(csv_file: &str, command_template: &str) -> io::Result<Vec<String>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_path(csv_file)
-        .expect("Failed to open CSV file");
-    let headers = rdr.headers().unwrap().clone();
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let headers = rdr.headers().map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?.clone();
     let mut jobs = Vec::new();
 
     for result in rdr.records() {
-        let record = result.expect("Failed to read CSV record");
+        let record = result.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         let mut job_command = command_template.to_string();
 
         for (i, header) in headers.iter().enumerate() {
@@ -47,17 +38,18 @@ fn submit_jobs(
         jobs.push(job_command);
     }
 
-    let num_jobs = jobs.len();
-    if num_jobs == 0 {
-        eprintln!("No jobs found in CSV.");
-        return;
-    }
+    Ok(jobs)
+}
 
-    let batch_size = batch_size.unwrap_or_else(|| {
+fn calculate_batch_size(num_jobs: usize, batch_size: Option<usize>) -> usize {
+    batch_size.unwrap_or_else(|| {
         let calculated = ((num_jobs as f64) * 0.2).ceil() as usize;
         calculated.min(num_jobs)
-    });
+    })
+}
 
+fn submit_jobs_to_scheduler(jobs: &[String], log_dir: &str, memory_mb: u32, threads: u32, batch_size: usize) -> io::Result<String> {
+    let num_jobs = jobs.len();
     let job_array = format!("arrayify_job_array[1-{}]%{}", num_jobs, batch_size);
     let output_log = format!("{}/job_%J_%I.out", log_dir);
     let error_log = format!("{}/job_%J_%I.err", log_dir);
@@ -70,7 +62,7 @@ fn submit_jobs(
     let mut script = String::new();
     script.push_str("#!/bin/bash\n\nINDEX=$((LSB_JOBINDEX - 1))\n\n");
     script.push_str("JOBS=(");
-    for job in &jobs {
+    for job in jobs {
         script.push_str(&format!("\"{}\" ", job));
     }
     script.push_str(")\n\n");
@@ -81,8 +73,7 @@ fn submit_jobs(
     let child = Command::new("bash")
         .arg("-c")
         .arg(format!("echo '{}' | {}", script, bsub_cmd))
-        .output()
-        .expect("Failed to execute bsub command");
+        .output()?;
 
     let bsub_output = String::from_utf8_lossy(&child.stdout);
     let re = Regex::new(r"Job <(\d+)>").unwrap();
@@ -92,14 +83,42 @@ fn submit_jobs(
         .map(|m| m.as_str())
         .unwrap_or("unknown");
 
-    let log_file_path = format!("{}/arrayify-{}.log", log_dir, job_id);
-    let mut log_file = fs::File::create(&log_file_path).expect("Failed to create log file");
+    Ok(job_id.to_string())
+}
 
+fn write_job_log(log_file_path: &str, jobs: &[String]) -> io::Result<()> {
+    let mut log_file = File::create(log_file_path)?;
     for (index, job_command) in jobs.iter().enumerate() {
-        writeln!(log_file, "[{}] {}", index + 1, job_command).expect("Failed to write to log file");
+        writeln!(log_file, "[{}] {}", index + 1, job_command)?;
+    }
+    Ok(())
+}
+
+pub fn submit_jobs(
+    csv_file: &str,
+    command_template: &str,
+    log_dir: &str,
+    memory_gb: u32,
+    threads: u32,
+    batch_size: Option<usize>,
+) -> io::Result<()> {
+    let memory_mb = memory_gb * 1000;
+    fs::create_dir_all(log_dir)?;
+
+    let jobs = read_jobs_from_csv(csv_file, command_template)?;
+    if jobs.is_empty() {
+        eprintln!("No jobs found in CSV.");
+        return Ok(());
     }
 
-    print_run_stats(num_jobs, log_dir, log_file_path, job_id);
+    let batch_size = calculate_batch_size(jobs.len(), batch_size);
+    let job_id = submit_jobs_to_scheduler(&jobs, log_dir, memory_mb, threads, batch_size)?;
+
+    let log_file_path = format!("{}/arrayify-{}.log", log_dir, job_id);
+    write_job_log(&log_file_path, &jobs)?;
+
+    print_run_stats(jobs.len(), log_dir, log_file_path, &job_id);
+    Ok(())
 }
 
 fn print_run_stats(num_jobs: usize, log_dir: &str, log_file_path: String, job_id: &str) {
@@ -225,12 +244,64 @@ fn main() {
                 memory_gb,
                 threads,
                 batch_size,
-            );
+            ).expect("Job submission failed");
         }
         Some(("check", check_matches)) => {
             let job_id = check_matches.get_one::<String>("job_id").unwrap();
             check_jobs(job_id);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_read_jobs_from_csv() {
+        let mut csv_file = NamedTempFile::new().unwrap();
+        writeln!(csv_file, "header1,header2\nvalue1,value2").unwrap();
+
+        let jobs = read_jobs_from_csv(csv_file.path().to_str().unwrap(), "echo {header1} {header2}").unwrap();
+        assert_eq!(jobs, vec!["echo value1 value2"]);
+    }
+
+    #[test]
+    fn test_calculate_batch_size() {
+        assert_eq!(calculate_batch_size(10, None), 2); // 20% of 10, rounded up
+        assert_eq!(calculate_batch_size(10, Some(5)), 5); // Custom batch size
+        assert_eq!(calculate_batch_size(1, None), 1); // Minimum batch size
+    }
+
+    #[test]
+    fn test_write_job_log() {
+        let log_file = NamedTempFile::new().unwrap();
+        let jobs = vec!["job1".to_string(), "job2".to_string()];
+
+        write_job_log(log_file.path().to_str().unwrap(), &jobs).unwrap();
+
+        let contents = fs::read_to_string(log_file.path()).unwrap();
+        assert!(contents.contains("[1] job1"));
+        assert!(contents.contains("[2] job2"));
+    }
+
+    #[test]
+    fn test_submit_jobs_empty_csv() {
+        let mut csv_file = NamedTempFile::new().unwrap();
+        writeln!(csv_file, "header1,header2").unwrap(); // Empty CSV
+
+        let result = submit_jobs(
+            csv_file.path().to_str().unwrap(),
+            "echo {header1}",
+            "logs",
+            1,
+            1,
+            None,
+        );
+
+        assert!(result.is_ok());
     }
 }
