@@ -29,7 +29,7 @@ With -d (directory) options you are limted to ID,R1,R2 identifers however with t
 "spades.py -1 {R1} -2 {R2} -o {ID}"
 ```
 
-!note this has to be quoted
+> **_NOTE:_**  this has to be quoted
 
 this can now be run and will create a array for each file pair in a directory or every row in a manifest
 
