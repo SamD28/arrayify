@@ -52,6 +52,7 @@ fn submit_jobs_to_scheduler(
     log_dir: &str,
     memory_mb: u32,
     threads: u32,
+    queue: &str,
     batch_size: usize,
 ) -> io::Result<String> {
     // Count the number of lines in the file to determine the job array size
@@ -62,8 +63,8 @@ fn submit_jobs_to_scheduler(
 
     // Generate the bsub command
     let bsub_cmd = format!(
-        "bsub -J {} -n {} -M {} -R \"select[mem>{}] rusage[mem={}]\" -o {} -e {}",
-        job_array, threads, memory_mb, memory_mb, memory_mb, output_log, error_log
+        "bsub -J {} -q {} -n {} -M {} -R \"select[mem>{}] rusage[mem={}]\" -o {} -e {}",
+        job_array, queue, threads, memory_mb, memory_mb, memory_mb, output_log, error_log
     );
 
     // Generate the script that uses `sed` to extract the job command from the file
@@ -101,6 +102,7 @@ pub fn submit_jobs(
     log_dir: &str,
     memory_gb: u32,
     threads: u32,
+    queue: &str,
     batch_size: Option<usize>,
     format: InputFormat,
 ) -> io::Result<()> {
@@ -126,7 +128,7 @@ pub fn submit_jobs(
 
     // Submit jobs to the scheduler
     let batch_size = calculate_batch_size(jobs.len(), batch_size);
-    let job_id = submit_jobs_to_scheduler(&log_file_path, log_dir, memory_mb, threads, batch_size)?;
+    let job_id = submit_jobs_to_scheduler(&log_file_path, log_dir, memory_mb, threads, queue, batch_size)?;
 
     // Print run statistics
     print_run_stats(jobs.len(), log_dir, &log_file_path, &job_id);

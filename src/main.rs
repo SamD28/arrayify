@@ -129,6 +129,7 @@ fn main() {
                     }
                 })
                 .unwrap_or(None);
+            let queue = sub_matches.get_one::<String>("queue").unwrap();
 
             // Determine the input format and set input_path
             let (format, input_path) = if let Some(csv) = csv_file {
@@ -146,6 +147,7 @@ fn main() {
                 log_dir,
                 memory_gb,
                 threads,
+                queue,
                 batch_size,
                 format,
             )

@@ -2,7 +2,7 @@ use clap::{Arg, ArgMatches, Command as ClapCommand};
 
 pub fn parse_args() -> ArgMatches {
     ClapCommand::new("arrayify")
-        .version("0.2.0")
+        .version("0.2.1")
         .author("Sam Dougan")
         .about("Submits and checks bsub job arrays from a CSV file or directory")
         .subcommand_required(true)
@@ -88,6 +88,14 @@ pub fn parse_args() -> ArgMatches {
                         .value_name("BATCH_SIZE")
                         .help("Number of jobs running concurrently (default: 20% of array)")
                         .default_value("auto")
+                )
+                .arg(
+                    Arg::new("queue")
+                    .short('q')
+                    .long("queue")
+                    .value_name("QUEUE")
+                    .help("Bsub queue to submit to (default: normal)")
+                    .default_value("normal")
                 )
         )
         .subcommand(
