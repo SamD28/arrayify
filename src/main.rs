@@ -108,6 +108,7 @@ fn main() {
             }
 
             let command_template = sub_matches.get_one::<String>("command").unwrap();
+            let job_prefix = sub_matches.get_one::<String>("job_prefix").unwrap();
             let log_dir = sub_matches.get_one::<String>("log").unwrap();
             let memory_gb: u32 = sub_matches
                 .get_one::<String>("memory")
@@ -144,6 +145,7 @@ fn main() {
             submission::submit_jobs(
                 input_path,
                 command_template,
+                job_prefix,
                 log_dir,
                 memory_gb,
                 threads,
