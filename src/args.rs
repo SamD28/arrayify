@@ -58,6 +58,14 @@ pub fn parse_args() -> ArgMatches {
                         .required(true)
                 )
                 .arg(
+                    Arg::new("job_prefix")
+                    .short('p')
+                    .long("job_prefix")
+                    .value_name("PREFIX")
+                    .help("prefix for job submission name i.e. prefix_job_array")
+                    .default_value("arrayify")
+                )
+                .arg(
                     Arg::new("log")
                         .short('l')
                         .long("log")
@@ -70,7 +78,7 @@ pub fn parse_args() -> ArgMatches {
                         .short('m')
                         .long("memory")
                         .value_name("MEMORY_GB")
-                        .help("Amount of memory per job in GB (default: 1GB)")
+                        .help("Amount of memory per job in GB")
                         .default_value("1")
                 )
                 .arg(
@@ -78,7 +86,7 @@ pub fn parse_args() -> ArgMatches {
                         .short('t')
                         .long("threads")
                         .value_name("THREADS")
-                        .help("Number of threads per job (default: 1)")
+                        .help("Number of threads per job")
                         .default_value("1")
                 )
                 .arg(
@@ -94,7 +102,7 @@ pub fn parse_args() -> ArgMatches {
                     .short('q')
                     .long("queue")
                     .value_name("QUEUE")
-                    .help("Bsub queue to submit to (default: normal)")
+                    .help("Bsub queue to submit to")
                     .default_value("normal")
                 )
         )
