@@ -1,19 +1,9 @@
 mod args;
 mod jobs;
 mod submission;
-
-use clap::Subcommand;
+use crate::args::Commands;
 use std::process::Command;
 use submission::InputFormat;
-
-#[derive(Subcommand)]
-enum SubCommands {
-    Sub,
-    Check {
-        #[arg(short, long, value_name = "JOB_ID")]
-        job_id: String,
-    },
-}
 
 fn check_jobs(job_id: &str) {
     let output = Command::new("bjobs")
@@ -94,46 +84,24 @@ fn check_jobs(job_id: &str) {
 }
 
 fn main() {
-    let matches = args::parse_args();
+    let cli = args::parse_args();
 
-    match matches.subcommand() {
-        Some(("sub", sub_matches)) => {
-            let csv_file = sub_matches.get_one::<String>("csv");
-            let dir_path = sub_matches.get_one::<String>("dir");
+    let command = cli
+        .command
+        .or(cli.sub.map(Commands::Sub))
+        .expect("error validating clap subcommand");
 
-            // Ensure only one of csv_file or dir_path is provided
+    match command {
+        Commands::Sub(args) => {
+            let csv_file = args.csv;
+            let dir_path = args.dir;
+
             if csv_file.is_some() && dir_path.is_some() {
                 eprintln!("Error: Cannot provide both --csv and --dir at the same time");
                 std::process::exit(1);
             }
 
-            let command_template = sub_matches.get_one::<String>("command").unwrap();
-            let job_prefix = sub_matches.get_one::<String>("job_prefix").unwrap();
-            let log_dir = sub_matches.get_one::<String>("log").unwrap();
-            let memory_gb: u32 = sub_matches
-                .get_one::<String>("memory")
-                .unwrap()
-                .parse()
-                .expect("Memory must be a valid number in GB");
-            let threads: u32 = sub_matches
-                .get_one::<String>("threads")
-                .unwrap()
-                .parse()
-                .expect("Threads must be a valid number");
-            let batch_size = sub_matches
-                .get_one::<String>("batch_size")
-                .map(|value| {
-                    if value == "auto" {
-                        None
-                    } else {
-                        value.parse::<usize>().ok()
-                    }
-                })
-                .unwrap_or(None);
-            let queue = sub_matches.get_one::<String>("queue").unwrap();
-
-            // Determine the input format and set input_path
-            let (format, input_path) = if let Some(csv) = csv_file {
+            let (format, input_path): (InputFormat, String) = if let Some(csv) = csv_file {
                 (InputFormat::Csv, csv)
             } else if let Some(dir) = dir_path {
                 (InputFormat::Directory, dir)
@@ -142,23 +110,27 @@ fn main() {
                 std::process::exit(1);
             };
 
+            let batch_size = if args.batch_size == "auto" {
+                None
+            } else {
+                args.batch_size.parse::<usize>().ok()
+            };
+
             submission::submit_jobs(
-                input_path,
-                command_template,
-                job_prefix,
-                log_dir,
-                memory_gb,
-                threads,
-                queue,
+                &input_path,
+                &args.command,
+                &args.job_prefix,
+                &args.log,
+                &args.memory,
+                &args.threads,
+                &args.queue,
                 batch_size,
                 format,
             )
             .expect("Job submission failed");
         }
-        Some(("check", check_matches)) => {
-            let job_id = check_matches.get_one::<String>("job_id").unwrap();
-            check_jobs(job_id);
+        Commands::Check { job_id } => {
+            check_jobs(&job_id);
         }
-        _ => {}
     }
 }
