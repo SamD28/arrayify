@@ -4,7 +4,32 @@ use std::fs::{self};
 use std::io::{self};
 use std::path::{Path, PathBuf};
 
-pub fn read_jobs_from_csv(csv_file: &str, command_template: &str) -> io::Result<Vec<String>> {
+use crate::types::{InputFormat, Job};
+use crate::ArrayifyError;
+
+impl Job<'_> {
+    pub fn generate_jobs(&mut self) {
+        let stdout_template = self.stdout.map(|s| s.as_str());
+        let pairs = match self.input {
+            InputFormat::Csv(path) => read_jobs_from_csv(path.to_str().unwrap(), self.command, stdout_template),
+            InputFormat::Directory(path) => read_jobs_from_dir(path.to_str().unwrap(), self.command, stdout_template),
+        };
+
+        match pairs {
+            Ok(pairs) => {
+                self.jobs = pairs.iter().map(|(cmd, _)| cmd.clone()).collect();
+                self.stdout_paths = pairs.into_iter().filter_map(|(_, s)| s).collect();
+            }
+            Err(e) => {
+                ArrayifyError::CommandError(e.to_string());
+                self.jobs = Vec::new();
+                self.stdout_paths = Vec::new();
+            }
+        }
+    }
+}
+
+pub fn read_jobs_from_csv(csv_file: &str, command_template: &str, stdout_template: Option<&str>) -> io::Result<Vec<(String, Option<String>)>> {
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
         .from_path(csv_file)
@@ -19,14 +44,18 @@ pub fn read_jobs_from_csv(csv_file: &str, command_template: &str) -> io::Result<
     for result in rdr.records() {
         let record = result.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         let mut job_command = command_template.to_string();
+        let mut stdout_path = stdout_template.map(|t| t.to_string());
 
         for (i, header) in headers.iter().enumerate() {
             let placeholder = format!("{{{}}}", header);
             if let Some(value) = record.get(i) {
                 job_command = job_command.replace(&placeholder, value);
+                if let Some(ref mut path) = stdout_path {
+                    *path = path.replace(&placeholder, value);
+                }
             }
         }
-        jobs.push(job_command);
+        jobs.push((job_command, stdout_path));
     }
 
     Ok(jobs)
@@ -35,7 +64,8 @@ pub fn read_jobs_from_csv(csv_file: &str, command_template: &str) -> io::Result<
 pub fn read_jobs_from_dir(
     dir_path: &str,
     command_template: &str,
-) -> io::Result<Vec<std::string::String>> {
+    stdout_template: Option<&str>,
+) -> io::Result<Vec<(String, Option<String>)>> {
     let dir = Path::new(dir_path);
     if !dir.is_dir() {
         return Err(io::Error::new(
@@ -80,7 +110,12 @@ pub fn read_jobs_from_dir(
                 .replace("{ID}", &id)
                 .replace("{R1}", r1_path.to_str().unwrap_or_default())
                 .replace("{R2}", r2_path.to_str().unwrap_or_default());
-            jobs.push(job_command);
+            let stdout_path = stdout_template.map(|t| {
+                t.replace("{ID}", &id)
+                    .replace("{R1}", r1_path.to_str().unwrap_or_default())
+                    .replace("{R2}", r2_path.to_str().unwrap_or_default())
+            });
+            jobs.push((job_command, stdout_path));
         } else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

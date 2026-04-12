@@ -1,141 +1,119 @@
-use crate::jobs;
 use chrono::Local;
 use regex::Regex;
 use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io::Write;
 use std::process::Command;
 
-#[derive(Debug, Clone, Copy)]
-pub enum InputFormat {
-    Csv,
-    Directory,
-    // Add new formats here in the future
-}
+use crate::error::ArrayifyError;
+use crate::types::Job;
 
-pub fn write_job_log(log_file_path: &str, jobs: &[String]) -> io::Result<()> {
-    let mut log_file = File::create(log_file_path)?;
-    for job_command in jobs.iter() {
-        writeln!(log_file, "{}", job_command)?;
-    }
-    Ok(())
-}
+impl Job<'_> {
+    pub fn submit_jobs(self) -> Result<(), ArrayifyError> {
+        fs::create_dir_all(self.log_directory)?;
 
-pub fn calculate_batch_size(num_jobs: usize, batch_size: Option<usize>) -> usize {
-    batch_size.unwrap_or_else(|| {
-        let calculated = ((num_jobs as f64) * 0.2).ceil() as usize;
-        calculated.min(num_jobs)
-    })
-}
+        if self.jobs.is_empty() {
+            return Err(ArrayifyError::CommandError("No jobs found.".into()));
+        }
 
-fn count_lines_in_file(file_path: &str) -> io::Result<usize> {
-    let content = std::fs::read_to_string(file_path)?;
-    Ok(content.lines().count())
-}
+        // Log the jobs
+        let timestamp = Local::now().format("%Y-%m-%d-%H-%M").to_string();
+        let log_file_path = format!("{}/arrayify-{}.log", self.log_directory, timestamp);
+        self.write_job_log(&log_file_path)?;
 
-fn print_run_stats(num_jobs: usize, log_dir: &str, log_file_path: &str, job_id: &str) {
-    let message = format!(
-        r#"🚀 Job submission complete! ✅
-🔖 Job ID is: {}
-📌 {} jobs submitted.
-📝 Job commands logged in: {}
-📂 Logs can be found in: {}
-📡 Track with -
-   arrayify check {}"#,
-        job_id, num_jobs, log_file_path, log_dir, job_id
-    );
+        let job_id = self.submit_jobs_to_scheduler(&log_file_path)?;
 
-    println!("{}", message);
-}
-
-fn submit_jobs_to_scheduler(
-    job_file_path: &str,
-    log_dir: &str,
-    job_prefix: &str,
-    memory_mb: u32,
-    threads: u32,
-    queue: &str,
-    batch_size: usize,
-) -> io::Result<String> {
-    // Count the number of lines in the file to determine the job array size
-    let num_jobs = count_lines_in_file(job_file_path)?;
-    let job_array = format!("{}_job_array[1-{}]%{}", job_prefix, num_jobs, batch_size);
-    let output_log = format!("{}/job_%J_%I.out", log_dir);
-    let error_log = format!("{}/job_%J_%I.err", log_dir);
-
-    // Generate the bsub command
-    let bsub_cmd = format!(
-        "bsub -J {} -q {} -n {} -M {} -R \"select[mem>{}] rusage[mem={}]\" -o {} -e {}",
-        job_array, queue, threads, memory_mb, memory_mb, memory_mb, output_log, error_log
-    );
-
-    // Generate the script that uses `sed` to extract the job command from the file
-    let script = format!(
-        r#"#!/bin/bash
-
-INDEX=$((LSB_JOBINDEX - 1))
-COMMAND=$(sed -n "$((INDEX + 1))p" {})
-$COMMAND
-"#,
-        job_file_path
-    );
-
-    // Submit the job using the bsub command
-    let child = Command::new("bash")
-        .arg("-c")
-        .arg(format!("echo '{}' | {}", script, bsub_cmd))
-        .output()?;
-
-    // Extract the job ID from the bsub output
-    let bsub_output = String::from_utf8_lossy(&child.stdout);
-    let re = Regex::new(r"Job <(\d+)>").unwrap();
-    let job_id = re
-        .captures(&bsub_output)
-        .and_then(|cap| cap.get(1))
-        .map(|m| m.as_str())
-        .unwrap_or("unknown");
-
-    Ok(job_id.to_string())
-}
-
-pub fn submit_jobs(
-    input_path: &str,
-    command_template: &str,
-    job_prefix: &str,
-    log_dir: &str,
-    memory_gb: u32,
-    threads: u32,
-    queue: &str,
-    batch_size: Option<usize>,
-    format: InputFormat,
-) -> io::Result<()> {
-    let memory_mb = memory_gb * 1000;
-    fs::create_dir_all(log_dir)?;
-
-    // Read jobs based on the input format
-    let jobs = match format {
-        InputFormat::Csv => jobs::read_jobs_from_csv(input_path, command_template)?,
-        InputFormat::Directory => jobs::read_jobs_from_dir(input_path, command_template)?,
-        // Add new formats here in the future
-    };
-
-    if jobs.is_empty() {
-        eprintln!("No jobs found.");
-        return Ok(());
+        self.print_run_stats(&log_file_path, &job_id);
+        Ok(())
     }
 
-    // Log the jobs
-    let timestamp = Local::now().format("%Y-%m-%d-%H-%M").to_string();
-    let log_file_path = format!("{}/arrayify-{}.log", log_dir, timestamp);
-    write_job_log(&log_file_path, &jobs)?;
+    fn write_job_log(&self, log_file_path: &str) -> Result<(), ArrayifyError> {
+        let mut log_file = File::create(log_file_path)?;
+        if self.stdout_paths.is_empty() {
+            for job_command in self.jobs.iter() {
+                writeln!(log_file, "{}", job_command)?;
+            }
+        } else {
+            for (job_command, stdout_path) in self.jobs.iter().zip(self.stdout_paths.iter()) {
+                writeln!(log_file, "{}\t{}", job_command, stdout_path)?;
+            }
+        }
+        Ok(())
+    }
 
-    // Submit jobs to the scheduler
-    let batch_size = calculate_batch_size(jobs.len(), batch_size);
-    let job_id = submit_jobs_to_scheduler(&log_file_path, log_dir, job_prefix,  memory_mb, threads, queue, batch_size)?;
+    fn print_run_stats(&self, log_file_path: &str, job_id: &str) {
+        let message = format!(
+            r#"🚀 Job submission complete! ✅
+    🔖 Job ID is: {}
+    📌 {} jobs submitted.
+    📝 Job commands logged in: {}
+    📂 Logs can be found in: {}
+    📡 Track with -
+    bjobs -A {}"#,
+            job_id, self.jobs.len(), log_file_path, self.log_directory, job_id
+        );
 
-    // Print run statistics
-    print_run_stats(jobs.len(), log_dir, &log_file_path, &job_id);
-    Ok(())
+        println!("{}", message);
+    }
+
+    fn submit_jobs_to_scheduler(&self, job_file_path: &String) -> Result<String, ArrayifyError> {
+        let memory_mb: usize = self.memory * 1000;
+        // Count the number of lines in the file to determine the job array size
+        let num_jobs = self.jobs.len();
+        let job_array = format!("{}_job_array[1-{}]%{}", self.job_prefix, num_jobs, self.batch_size);
+        let output_log = format!("{}/job_%J_%I.out", self.log_directory);
+        let error_log = format!("{}/job_%J_%I.err", self.log_directory);
+
+        // Generate the bsub command
+        let bsub_cmd = format!(
+            "bsub -J {} -q {} -n {} -M {} -R \"select[mem>{}] rusage[mem={}]\" -o {} -e {}",
+            job_array, self.queue, self.threads, memory_mb, memory_mb, memory_mb, output_log, error_log
+        );
+
+        // Generate the script that uses `sed` to extract the job command from the file
+        let script = if self.stdout_paths.is_empty() {
+            format!(
+                r#"#!/bin/bash
+
+    INDEX=$((LSB_JOBINDEX - 1))
+    COMMAND=$(sed -n "$((INDEX + 1))p" {})
+    $COMMAND
+    "#,
+                job_file_path
+            )
+        } else {
+            format!(
+                r#"#!/bin/bash
+
+    INDEX=$((LSB_JOBINDEX - 1))
+    LINE=$(sed -n "$((INDEX + 1))p" {})
+    COMMAND=$(printf '%s' "$LINE" | cut -f1)
+    STDOUT=$(printf '%s' "$LINE" | cut -f2)
+    mkdir -p "$(dirname "$STDOUT")"
+    bash -c "$COMMAND" > "$STDOUT"
+    "#,
+                job_file_path
+            )
+        };
+
+        // Submit the job using the bsub command
+        let child = Command::new("bash")
+            .arg("-c")
+            .arg(format!("echo '{}' | {}", script, bsub_cmd))
+            .output()?;
+
+        // Extract the job ID from the bsub output
+        let bsub_output = String::from_utf8_lossy(&child.stdout);
+        let re = Regex::new(r"Job <(\d+)>").unwrap();
+        let job_id = re
+            .captures(&bsub_output)
+            .and_then(|cap| cap.get(1))
+            .map(|m| m.as_str())
+            .unwrap_or("unknown");
+
+        Ok(job_id.to_string())
+    }
 }
+
 
 #[cfg(test)]
 mod tests {

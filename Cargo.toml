@@ -9,6 +9,7 @@ clap = { version = "4.0", features = ["derive"] }
 regex = "1"
 tempfile = "3.17.1"
 chrono = "0.4.40"
+thiserror = "2.0.18"
 
 [[bin]]
 name = "arrayify"
